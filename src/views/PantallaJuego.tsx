@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from "react";
 import { Nivel } from "../data/niveles";
 import BombillaPista from "../components/BombillaPista";
+import Nokia3310 from "../components/Nokia3310";
 
 interface PantallaJuegoProps {
   nivel: Nivel;
@@ -12,7 +13,7 @@ interface PantallaJuegoProps {
   onChangeCode: (value: string, index: number) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>, index: number) => void;
   onVolver: () => void;
-  onValidar: () => void;
+  onValidar: (codigoManual?: string) => void;
 }
 
 export default function PantallaJuego({
@@ -31,6 +32,17 @@ export default function PantallaJuego({
 
   const [luzEncendida, setLuzEncendida] = useState(true);
   const logPrintado = useRef(false);
+
+  if (nivel.id === 2) {
+    return (
+      <Nokia3310
+        codigoCorrecto={codigoCorrecto}
+        onValidar={(codigoTyped) => onValidar(codigoTyped)}
+        onVolver={onVolver}
+        status={status}
+      />
+    );
+  }
 
   useEffect(() => {
     if (inputRefs.current[0]) {
@@ -155,7 +167,7 @@ export default function PantallaJuego({
         )}
 
         {/*botones*/}
-        <button onClick={status === "success" ? onVolver : onValidar} className={buttonValidarClass}>
+        <button onClick={status === "success" ? onVolver : () => onValidar()} className={buttonValidarClass}>
           {status === "success" ? "Ir al menú de niveles" : "Verificar Código"}
         </button>
 
