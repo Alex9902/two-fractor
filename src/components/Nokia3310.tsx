@@ -32,12 +32,6 @@ const SvgEnvelope = () => (
   </svg>
 );
 
-const SvgRotate = () => (
-  <svg viewBox="0 0 24 24" className="w-4 h-4 fill-none stroke-current stroke-[2.5] stroke-linecap-round stroke-linejoin-round">
-    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-  </svg>
-);
-
 const T9_SECUENCIAS: Record<string, string[]> = {
   "1": [".", ",", "?", "!", "1"],
   "2": ["A", "B", "C", "2"],
@@ -76,21 +70,25 @@ export default function Nokia3310({
   const [teclaActiva, setTeclaActiva] = useState<string | null>(null);
   const [indiceSecuencia, setIndiceSecuencia] = useState<number>(0);
   const [mensajeErrorT9, setMensajeErrorT9] = useState<string | null>(null);
-  const [girado, setGirado] = useState<boolean>(false);
 
+  const [rotY, setRotY] = useState<number>(0);
+
+  const isDragging = useRef<boolean>(false);
+  const dragStart = useRef({ x: 0, rotY: 0 });
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const caracterTemp = teclaActiva && T9_SECUENCIAS[teclaActiva]
     ? T9_SECUENCIAS[teclaActiva][indiceSecuencia]
     : "";
 
+  const palabraObjetivo = codigoCorrecto || "ARBOL";
+
   const confirmarCaracter = useCallback((char: string) => {
     if (!char) return;
-
-    setCodigoTyped((prev) => (prev + char).slice(0, 6));
+    setCodigoTyped((prev) => (prev + char).slice(0, palabraObjetivo.length));
     setTeclaActiva(null);
     setIndiceSecuencia(0);
-  }, []);
+  }, [palabraObjetivo.length]);
 
   const presionarTeclaT9 = useCallback((key: string) => {
     const secuencia = T9_SECUENCIAS[key];
@@ -121,14 +119,10 @@ export default function Nokia3310({
 
   const borrarCaracter = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-
-    if (teclaActiva) {
-      setTeclaActiva(null);
-      setIndiceSecuencia(0);
-    } else {
-      setCodigoTyped((prev) => prev.slice(0, -1));
-    }
-  }, [teclaActiva]);
+    setTeclaActiva(null);
+    setIndiceSecuencia(0);
+    setCodigoTyped((prev) => prev.slice(0, -1));
+  }, []);
 
   const ejecutarVerificacion = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -136,19 +130,65 @@ export default function Nokia3310({
     let codigoFinal = codigoTyped;
     if (teclaActiva && T9_SECUENCIAS[teclaActiva]) {
       const charPendiente = T9_SECUENCIAS[teclaActiva][indiceSecuencia];
-      codigoFinal = (codigoTyped + charPendiente).slice(0, 6);
+      codigoFinal = (codigoTyped + charPendiente).slice(0, palabraObjetivo.length);
     }
 
     setTeclaActiva(null);
 
-    if (/[^0-9]/.test(codigoFinal)) {
-      setMensajeErrorT9("¿Letras en un 2FA? ¡Pulsa más veces!");
-      setTimeout(() => setMensajeErrorT9(null), 3000);
-      return;
+    if (codigoFinal.toUpperCase() === palabraObjetivo.toUpperCase()) {
+      onValidar(codigoFinal);
+    } else {
+      setMensajeErrorT9("CÓDIGO INCORRECTO");
+      setTimeout(() => setMensajeErrorT9(null), 2500);
+      onValidar("INCORRECTO");
     }
+  }, [codigoTyped, teclaActiva, indiceSecuencia, palabraObjetivo, onValidar]);
 
-    onValidar(codigoFinal);
-  }, [codigoTyped, teclaActiva, indiceSecuencia, onValidar]);
+  const handleMouseDown = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("button")) return;
+    isDragging.current = true;
+    dragStart.current = { x: e.clientX, rotY };
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("button")) return;
+    if (e.touches[0]) {
+      isDragging.current = true;
+      dragStart.current = { x: e.touches[0].clientX, rotY };
+    }
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      const dx = e.clientX - dragStart.current.x;
+      setRotY(dragStart.current.rotY + dx * 0.7);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isDragging.current || !e.touches[0]) return;
+      const dx = e.touches[0].clientX - dragStart.current.x;
+      setRotY(dragStart.current.rotY + dx * 0.7);
+    };
+
+    const handleRelease = () => {
+      isDragging.current = false;
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleRelease);
+    window.addEventListener("touchmove", handleTouchMove);
+    window.addEventListener("touchend", handleRelease);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleRelease);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleRelease);
+    };
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -166,39 +206,35 @@ export default function Nokia3310({
   }, [presionarTeclaT9, borrarCaracter, ejecutarVerificacion]);
 
   return (
-    <div className="flex flex-col items-center w-full">
+    <div className="flex flex-col items-center w-full select-none">
       <button
         onClick={onVolver}
-        className="self-start bg-white text-black text-xs font-black uppercase border-2 border-black px-3 py-1.5 mb-4 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-gray-100 cursor-pointer"
+        className="self-start bg-white text-black text-xs font-black uppercase border-2 border-black px-3 py-1.5 mb-4 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-gray-100 cursor-pointer z-50"
       >
         ← Volver al selector
       </button>
 
-      <div className="[perspective:1000px] w-full flex flex-col items-center">
+      <div className="[perspective:1000px] w-full flex flex-col items-center my-2">
         <div
-          className={`relative w-full max-w-[310px] sm:max-w-[360px] transition-transform duration-700 [transform-style:preserve-3d] ${
-            girado ? "[transform:rotateY(180deg)]" : ""
-          }`}
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleTouchStart}
+          className="relative w-[300px] sm:w-[330px] h-[520px] sm:h-[550px] cursor-default [transform-style:preserve-3d] transition-transform duration-75 ease-out"
+          style={{
+            transform: `rotateY(${rotY}deg)`,
+          }}
         >
-          <div className="w-full bg-[#2B3542] border-4 border-black p-4 sm:p-7 rounded-[38px] sm:rounded-[48px] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] sm:shadow-[14px_14px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center relative [backface-visibility:hidden]">
-            <button
-              onClick={() => setGirado(true)}
-              className="absolute -top-3 -right-3 bg-[#FFDE4D] text-black border-2 border-black rounded-full p-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:scale-110 active:scale-95 cursor-pointer z-30"
-              title="Girar teléfono para ver la parte trasera"
-            >
-              <SvgRotate />
-            </button>
-
-            <div className="flex flex-col gap-1 items-center mb-2">
+          {/* CARA FRONTAL DEL TELÉFONO */}
+          <div className="absolute inset-0 w-full h-full bg-[#2B3542] border-4 border-black p-4 sm:p-6 rounded-[44px] shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-between [backface-visibility:hidden]">
+            <div className="flex flex-col gap-1 items-center mb-1">
               <div className="w-2 h-3.5 bg-black/50 rounded-full" />
             </div>
 
-            <div className="font-black tracking-[0.25em] text-gray-200 text-base mb-3 uppercase">
+            <div className="font-black tracking-[0.25em] text-gray-200 text-base uppercase">
               NOKIA
             </div>
 
-            <div className="w-full bg-[#D1D5DB] border-4 border-black p-4 sm:p-5 rounded-[36px] shadow-[inset_3px_3px_0px_rgba(255,255,255,0.7)] flex flex-col items-center mb-5">
-              <div className="w-full bg-[#9BBC0F] border-4 border-black p-3.5 rounded-xl text-[#0F380F] font-mono shadow-[inset_3px_3px_0px_rgba(0,0,0,0.3)]">
+            <div className="w-full bg-[#D1D5DB] border-4 border-black p-3.5 rounded-[32px] shadow-[inset_3px_3px_0px_rgba(255,255,255,0.7)] flex flex-col items-center">
+              <div className="w-full bg-[#9BBC0F] border-4 border-black p-3 rounded-xl text-[#0F380F] font-mono shadow-[inset_3px_3px_0px_rgba(0,0,0,0.3)]">
                 <div className="flex justify-between items-center text-[10px] font-bold border-b border-[#0F380F]/30 pb-1 mb-2">
                   <span className="flex items-center gap-1">
                     <SvgSignal />
@@ -214,7 +250,7 @@ export default function Nokia3310({
                   <div className="font-bold flex items-center text-[10px] uppercase mb-0.5">
                     <SvgEnvelope /> Mensaje Entrante:
                   </div>
-                  <span>Código 2FA: <strong className="text-sm tracking-widest">{codigoCorrecto}</strong></span>
+                  <span>Mensaje 2FA: <strong className="text-sm tracking-widest">{palabraObjetivo}</strong></span>
                 </div>
 
                 <div className="text-center py-1">
@@ -249,11 +285,13 @@ export default function Nokia3310({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 w-full px-1">
+            <div className="grid grid-cols-3 gap-2.5 w-full px-1">
               {TECLAS_KEYPAD.map((item) => (
                 <button
                   key={item.key}
-                  onClick={() => {
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
                     if (item.key === "*") {
                       borrarCaracter();
                     } else if (item.key === "#") {
@@ -262,7 +300,7 @@ export default function Nokia3310({
                       presionarTeclaT9(item.key);
                     }
                   }}
-                  className="bg-[#E5E7EB] text-black border-3 border-black rounded-full py-2.5 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-[1px] active:shadow-none cursor-pointer flex flex-col items-center justify-center transition-all hover:bg-white"
+                  className="bg-[#E5E7EB] text-black border-3 border-black rounded-full py-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-[1px] active:shadow-none cursor-pointer flex flex-col items-center justify-center"
                 >
                   <span className="text-lg font-black leading-none">{item.key}</span>
                   {item.sub && (
@@ -275,28 +313,25 @@ export default function Nokia3310({
             </div>
           </div>
 
-          <div className="absolute inset-0 w-full h-full bg-[#2B3542] border-4 border-black p-6 sm:p-7 rounded-[38px] sm:rounded-[48px] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] sm:shadow-[14px_14px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-between [backface-visibility:hidden] [transform:rotateY(180deg)]">
-            <div className="w-12 h-3 bg-black/40 border-2 border-black rounded-b-lg mb-2" />
+          {/*nota*/}
+          <div className="absolute inset-0 w-full h-full bg-[#2B3542] border-4 border-black p-6 rounded-[44px] shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-between [transform:rotateY(180deg)] [backface-visibility:hidden]">
+            <div className="w-12 h-3.5 bg-black/40 border-2 border-black rounded-b-lg mb-2" />
 
-            <div className="w-full bg-[#FEF9C3] border-3 border-black p-4 rounded-lg rotate-[-2deg] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-center my-auto select-none">
-              <p className="text-[10px] font-black uppercase tracking-wider text-gray-700 mb-1">
-                📌 CÓDIGO 2FA APUNTADO:
-              </p>
-              <p className="text-3xl font-black tracking-[0.2em] text-black font-mono border-y-2 border-dashed border-black py-2 my-1">
-                {codigoCorrecto}
-              </p>
-              <p className="text-[9px] font-bold text-gray-600 mt-1 italic">
-                (Por si se me olvida el código 🤫)
-              </p>
+            <div className="relative my-auto rotate-[85deg] sm:rotate-[88deg] select-none scale-110 translate-x-8 sm:translate-x-10">
+              <div className="absolute -top-3 -left-3 w-12 h-5 bg-white/40 border border-white/60 backdrop-blur-[1px] rotate-[-15deg] shadow-sm z-10 pointer-events-none" />
+
+              <div className="absolute -bottom-3 -right-3 w-12 h-5 bg-white/40 border border-white/60 backdrop-blur-[1px] rotate-[10deg] shadow-sm z-10 pointer-events-none" />
+
+              <div className="bg-[#FEF9C3] border-3 border-black px-6 py-3 rounded-md shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-center">
+                <span className="font-mono font-black text-3xl sm:text-4xl text-black tracking-[0.25em] uppercase">
+                  {palabraObjetivo}
+                </span>
+              </div>
             </div>
 
-            <button
-              onClick={() => setGirado(false)}
-              className="bg-white text-black font-black text-xs uppercase border-3 border-black px-4 py-2 rounded-full shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-[1px] active:shadow-none cursor-pointer flex items-center gap-1.5 hover:bg-gray-100"
-            >
-              <SvgRotate />
-              <span>Volver a la Pantalla</span>
-            </button>
+            <div className="text-[10px] font-black uppercase text-gray-300 tracking-widest bg-black/30 px-3 py-1 rounded-full border border-gray-500">
+              NOKIA 3310 · MADE IN OLYMPO
+            </div>
           </div>
         </div>
       </div>
