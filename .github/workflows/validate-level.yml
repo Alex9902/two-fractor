@@ -29,5 +29,8 @@ jobs:
       - name: Validate level manifests
         run: node test/validate-manifests.js
 
+      - name: Run Vitest level test suite
+        run: npm test
+
       - name: Production build
         run: npm run build

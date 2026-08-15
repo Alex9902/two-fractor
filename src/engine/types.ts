@@ -5,8 +5,6 @@ export type Dificultad = "facil" | "medio" | "dificil" | "legendario";
 /**
  * Metadatos que declara cada nivel en su manifest.ts
  * El id debe coincidir exactamente con el nombre de la carpeta
- * 
- * username de github opcional para reconocimiento en nivel
  */
 export interface LevelManifest {
   id: string;
@@ -20,7 +18,6 @@ export interface LevelManifest {
 
   autor: string;
   github?: string;
-  tags: string[];
   color: string;
 }
 
