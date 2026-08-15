@@ -1,16 +1,16 @@
 interface AuthorBadgeProps {
-  autor: string;
+  autor?: string;
   github?: string;
   className?: string;
 }
 
 export default function AuthorBadge({ autor, github, className = "" }: AuthorBadgeProps) {
-  const gh = github ? github.replace(/^@/, "") : autor.replace(/^@/, "");
-  const autorClean = autor.replace(/^@/, "");
+  const gh = github ? github.replace(/^@/, "") : autor ? autor.replace(/^@/, "") : "";
+  if (!gh) return null;
 
   return (
-    <div className={`inline-flex items-center gap-1.5 text-xs font-black uppercase text-black/70 ${className}`}>
-      <span>Nivel por @{autorClean}</span>
+    <div className={`inline-flex items-center gap-1.5 text-xs font-black uppercase text-black/70 my-3 sm:my-4 ${className}`}>
+      <span>Creado por:</span>
       <a
         href={`https://github.com/${gh}`}
         target="_blank"
