@@ -27,7 +27,7 @@ jobs:
         run: npx tsc -p ts.config.json --noEmit
 
       - name: Validate level manifests
-        run: node scripts/validate-manifests.js
+        run: node test/validate-manifests.js
 
       - name: Production build
         run: npm run build
