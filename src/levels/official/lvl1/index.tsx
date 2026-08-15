@@ -10,7 +10,7 @@ function generarCodigo(): string {
   return Math.floor(min + Math.random() * (max - min)).toString();
 }
 
-export default function Lvl1({ onComplete, onBack, isCompleted }: LevelProps) {
+export default function Lvl1({ onComplete, onBack }: LevelProps) {
   const [codigoCorrecto] = useState(generarCodigo);
   const [codigoDecoy] = useState(() => {
     let decoy: string;

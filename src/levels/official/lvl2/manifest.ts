@@ -8,7 +8,7 @@ const manifest: LevelManifest = {
   descripcion: "Tienes que escribir en un Nokia 3310. Buena suerte.",
   dificultad: "medio",
   autor: "Alex9902",
-  tags: ["nokia", "t9", "retro", "2fa"],
+  github: "Alex9902",
   color: "bg-[#84CC16]",
 };
 

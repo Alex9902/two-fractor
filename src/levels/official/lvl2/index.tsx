@@ -8,7 +8,7 @@ const PALABRAS_T9 = [
   "CORREO", "HUELLA", "ROSTRO", "DOBLES",
 ];
 
-export default function Lvl2({ onComplete, onBack, isCompleted }: LevelProps) {
+export default function Lvl2({ onComplete, onBack }: LevelProps) {
   const [codigoCorrecto] = useState(
     () => PALABRAS_T9[Math.floor(Math.random() * PALABRAS_T9.length)]
   );

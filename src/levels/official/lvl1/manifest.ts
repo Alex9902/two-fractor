@@ -8,7 +8,7 @@ const manifest: LevelManifest = {
   descripcion: "Felicidades, sabes usar el ratón",
   dificultad: "facil",
   autor: "Alex9902",
-  tags: ["2fa", "codigo", "basico"],
+  github: "Alex9902",
   color: "bg-[#A855F7]",
 };
 
