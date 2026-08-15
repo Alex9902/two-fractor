@@ -12,7 +12,13 @@ export const NIVELES: Nivel[] = [
     titulo: "Nivel 1: Test de psicomotricidad básica",
     descripcion: "Felicidades, sabes usar el ratón",
     digitos: 6,
-    color: "bg-[#A3E635]"
+    color: "bg-[#A855F7]"
   },
-  //próxima pr
+  {
+    id: 2,
+    titulo: "Nivel 2: ",
+    descripcion: "No apto para menores de 35 años",
+    digitos: 6,
+    color: "bg-[#84CC16]"
+  }
 ];

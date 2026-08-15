@@ -1,20 +1,17 @@
 export default function SvgCandado() {
   return (
     <svg
-      className="absolute -top-7 -right-8 w-16 h-16 drop-shadow-[2.5px_2.5px_0px_rgba(0,0,0,1)] rotate-[15deg] select-none"
+      className="absolute -top-5 right-0 sm:-top-7 sm:-right-6 w-9 h-9 sm:w-16 sm:h-16 drop-shadow-[2.5px_2.5px_0px_rgba(0,0,0,1)] rotate-[15deg] select-none"
       viewBox="0 0 100 100"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      {/* Arco del candado (roto y desplazado) */}
-      {/* Lado izquierdo del arco */}
       <path
         d="M 32 50 L 32 33 C 32 20 42 20 47 25"
         stroke="black"
         strokeWidth="6"
         strokeLinecap="round"
       />
-      {/* Lado derecho del arco (desplazado hacia arriba/afuera) */}
       <path
         d="M 68 50 L 68 25 C 68 10 58 10 53 17"
         stroke="black"

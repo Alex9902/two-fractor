@@ -15,9 +15,9 @@ export default function NivelCard({
 }: NivelCardProps) {
   return (
     <div
-      className={`h-full border-4 border-black p-8 flex flex-col justify-between transition-all relative ${
+      className={`h-full border-4 border-black p-6 sm:p-8 flex flex-col justify-between transition-all relative ${
         estaDesbloqueado
-          ? `${nivel.color} cursor-pointer shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]`
+          ? `${nivel.color} cursor-pointer shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sm:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]`
           : "bg-[#E5E5E0] text-black/40 border-black/40 shadow-none cursor-not-allowed"
       }`}
       onClick={() => estaDesbloqueado && onSelect(nivel.id)}
