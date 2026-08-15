@@ -91,7 +91,9 @@ function validateLevelDir(levelPath, folderName) {
 
 function scanDir(dir) {
   if (!fs.existsSync(dir)) return;
+
   const entries = fs.readdirSync(dir, { withFileTypes: true });
+
   for (const entry of entries) {
     if (entry.isDirectory()) {
       validateLevelDir(path.join(dir, entry.name), entry.name);

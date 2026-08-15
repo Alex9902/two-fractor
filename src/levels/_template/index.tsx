@@ -1,4 +1,6 @@
 import type { LevelProps } from "../../engine/types";
+import manifest from "./manifest";
+import AuthorBadge from "../../shared/AuthorBadge";
 
 /**
  * Punto de entrada de tu nivel
@@ -10,11 +12,11 @@ import type { LevelProps } from "../../engine/types";
  *  - Puedes usar `isCompleted` para mostrar UI especial si el nivel ya fue superado
  *
  * Puedes añadir subcarpetas (components/, hooks/, etc.) dentro de tu carpeta de nivel
- * NO importes nada de otros niveles ni de shared/ salvo los types del engine
+ * Puedes colocar <AuthorBadge /> para que salga badge de tu github
  */
 export default function MiNivel({ onComplete, onBack, isCompleted }: LevelProps) {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-8 p-8">
+    <div className="flex flex-col items-center justify-center min-h-screen gap-8 p-8 relative">
       <button
         onClick={onBack}
         className="self-start bg-white border-4 border-black font-black uppercase px-4 py-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-gray-100 cursor-pointer"
@@ -22,7 +24,7 @@ export default function MiNivel({ onComplete, onBack, isCompleted }: LevelProps)
         ← Volver
       </button>
 
-      <h1 className="text-4xl font-black uppercase">Mi nivel</h1>
+      <h1 className="text-4xl font-black uppercase">{manifest.titulo}</h1>
 
       {isCompleted && (
         <p className="text-green-600 font-bold">¡Ya completaste este nivel!</p>
@@ -35,6 +37,9 @@ export default function MiNivel({ onComplete, onBack, isCompleted }: LevelProps)
       >
         Completar nivel
       </button>
+
+      {/* Insignia del autor con enlace a su GitHub */}
+      <AuthorBadge autor={manifest.autor} github={manifest.github} />
     </div>
   );
 }

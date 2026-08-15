@@ -14,7 +14,8 @@ const manifest: LevelManifest = {
   descripcion: "Descripción breve de qué hay que hacer",
 
   dificultad: "medio",
-  autor: "tu-github-username",
+  autor: "tu-nombre",
+  github: "tu-usuario-github",
   tags: ["etiqueta1", "etiqueta2"],
   color: "bg-[#6366F1]",
 };
