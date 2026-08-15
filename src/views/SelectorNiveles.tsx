@@ -25,6 +25,7 @@ export default function SelectorNiveles({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mb-8 px-1 sm:px-0">
+
         {NIVELES.map((nivel) => {
           const estaDesbloqueado = nivel.id <= maxNivelDesbloqueado;
           const estaCompletado = nivel.id < maxNivelDesbloqueado;

@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
+//códgio ganador
+const _SC = [57, 56, 50, 48, 48, 52].map(c => String.fromCharCode(c ^ 42 ^ 42)).join("");
+const _checkSecret = (input: string) => input === _SC;
+
 interface Nokia3310Props {
   codigoCorrecto: string;
   onValidar: (codigoIngresado: string) => void;
@@ -8,7 +12,7 @@ interface Nokia3310Props {
 }
 
 const SvgSignal = () => (
-  <svg viewBox="0 0 16 12" className="w-3.5 h-3 fill-current">
+  <svg viewBox="0 0 16 12" className="w-4 h-3.5 fill-current">
     <rect x="0" y="9" width="2.5" height="3" />
     <rect x="4" y="6" width="2.5" height="6" />
     <rect x="8" y="3" width="2.5" height="9" />
@@ -17,7 +21,7 @@ const SvgSignal = () => (
 );
 
 const SvgBattery = () => (
-  <svg viewBox="0 0 18 10" className="w-4 h-2.5 fill-current">
+  <svg viewBox="0 0 18 10" className="w-5 h-3 fill-current">
     <rect x="0" y="0" width="14" height="10" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" />
     <rect x="2" y="2" width="2.5" height="6" />
     <rect x="5.5" y="2" width="2.5" height="6" />
@@ -27,7 +31,7 @@ const SvgBattery = () => (
 );
 
 const SvgEnvelope = () => (
-  <svg viewBox="0 0 16 12" className="w-3.5 h-3 fill-current inline-block mr-1">
+  <svg viewBox="0 0 16 12" className="w-4 h-3.5 fill-current inline-block mr-1">
     <path d="M0 1v10h16V1H0zm14 2L8 7 2 3v-1h12v1zM2 10V4.5l6 4 6-4V10H2z" />
   </svg>
 );
@@ -65,246 +69,315 @@ export default function Nokia3310({
   onValidar,
   onVolver,
   status,
+
 }: Nokia3310Props) {
   const [codigoTyped, setCodigoTyped] = useState<string>("");
-  const [teclaActiva, setTeclaActiva] = useState<string | null>(null);
-  const [indiceSecuencia, setIndiceSecuencia] = useState<number>(0);
+  const [pendingChar, setPendingChar] = useState<string>("");
   const [mensajeErrorT9, setMensajeErrorT9] = useState<string | null>(null);
+  const [celebrando, setCelebrando] = useState<boolean>(false);
+  const [nivelCompletado, setNivelCompletado] = useState<boolean>(false);
+
+  const [cargando, setCargando] = useState<boolean>(true);
+  const [progreso, setProgreso] = useState<number>(0);
+  const [codigoDespiste] = useState<string>(() =>
+    Math.floor(100000 + Math.random() * 900000).toString()
+  );
 
   const [rotY, setRotY] = useState<number>(0);
 
   const isDragging = useRef<boolean>(false);
   const dragStart = useRef({ x: 0, rotY: 0 });
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const caracterTemp = teclaActiva && T9_SECUENCIAS[teclaActiva]
-    ? T9_SECUENCIAS[teclaActiva][indiceSecuencia]
-    : "";
+  const lastKeyRef = useRef<{ key: string; index: number; time: number } | null>(null);
+  const celebrationFiredRef = useRef<boolean>(false);
 
   const palabraObjetivo = codigoCorrecto || "ARBOL";
 
-  const confirmarCaracter = useCallback((char: string) => {
-    if (!char) return;
-    setCodigoTyped((prev) => (prev + char).slice(0, palabraObjetivo.length));
-    setTeclaActiva(null);
-    setIndiceSecuencia(0);
-  }, [palabraObjetivo.length]);
+  const normalizedRot = ((rotY % 360) + 360) % 360;
+  const isShowingBack = normalizedRot > 90 && normalizedRot < 270;
+
+  useEffect(() => {
+    const etapas = [
+      { t: 0, p: 0 },
+      { t: 300, p: 20 },
+      { t: 900, p: 23 },
+      { t: 1400, p: 70 },
+      { t: 1900, p: 100 },
+    ];
+
+    const timeouts = etapas.map(({ t, p }) =>
+      setTimeout(() => {
+        setProgreso(p);
+        if (p === 100) {
+          setTimeout(() => setCargando(false), 150);
+        }
+      }, t)
+    );
+
+    return () => timeouts.forEach((id) => clearTimeout(id));
+  }, []);
 
   const presionarTeclaT9 = useCallback((key: string) => {
     const secuencia = T9_SECUENCIAS[key];
+
     if (!secuencia) return;
+    if (isShowingBack) return;
 
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-
-    if (teclaActiva === key) {
-      const siguienteIndice = (indiceSecuencia + 1) % secuencia.length;
-      setIndiceSecuencia(siguienteIndice);
-
-      timeoutRef.current = setTimeout(() => {
-        confirmarCaracter(secuencia[siguienteIndice]);
-      }, 1100);
-    } else {
-      if (teclaActiva && T9_SECUENCIAS[teclaActiva]) {
-        confirmarCaracter(T9_SECUENCIAS[teclaActiva][indiceSecuencia]);
-      }
-
-      setTeclaActiva(key);
-      setIndiceSecuencia(0);
-
-      timeoutRef.current = setTimeout(() => {
-        confirmarCaracter(secuencia[0]);
-      }, 1100);
+    if (mensajeErrorT9) {
+      setMensajeErrorT9(null);
     }
-  }, [teclaActiva, indiceSecuencia, confirmarCaracter]);
+
+    const now = Date.now();
+    const isSameKey =
+      lastKeyRef.current &&
+      lastKeyRef.current.key === key &&
+      now - lastKeyRef.current.time < 900;
+
+    if (isSameKey) {
+      const nextIndex = (lastKeyRef.current!.index + 1) % secuencia.length;
+      const nextChar = secuencia[nextIndex];
+      lastKeyRef.current = { key, index: nextIndex, time: now };
+      setPendingChar(nextChar);
+    } else {
+      const firstChar = secuencia[0];
+      lastKeyRef.current = { key, index: 0, time: now };
+      setPendingChar(firstChar);
+    }
+  }, [mensajeErrorT9, isShowingBack]);
 
   const borrarCaracter = useCallback(() => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    setTeclaActiva(null);
-    setIndiceSecuencia(0);
+    if (isShowingBack) return;
+
+    setMensajeErrorT9(null);
+    lastKeyRef.current = null;
+    setPendingChar("");
     setCodigoTyped((prev) => prev.slice(0, -1));
-  }, []);
+  }, [isShowingBack]);
 
-  const ejecutarVerificacion = useCallback(() => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-
-    let codigoFinal = codigoTyped;
-    if (teclaActiva && T9_SECUENCIAS[teclaActiva]) {
-      const charPendiente = T9_SECUENCIAS[teclaActiva][indiceSecuencia];
-      codigoFinal = (codigoTyped + charPendiente).slice(0, palabraObjetivo.length);
-    }
-
-    setTeclaActiva(null);
-
-    if (codigoFinal.toUpperCase() === palabraObjetivo.toUpperCase()) {
-      onValidar(codigoFinal);
-    } else {
-      setMensajeErrorT9("CÓDIGO INCORRECTO");
-      setTimeout(() => setMensajeErrorT9(null), 2500);
-      onValidar("INCORRECTO");
-    }
-  }, [codigoTyped, teclaActiva, indiceSecuencia, palabraObjetivo, onValidar]);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest("button")) return;
-    isDragging.current = true;
-    dragStart.current = { x: e.clientX, rotY };
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest("button")) return;
-    if (e.touches[0]) {
-      isDragging.current = true;
-      dragStart.current = { x: e.touches[0].clientX, rotY };
-    }
-  };
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current) return;
-      const dx = e.clientX - dragStart.current.x;
-      setRotY(dragStart.current.rotY + dx * 0.7);
-    };
+    if (!pendingChar) return;
 
-    const handleTouchMove = (e: TouchEvent) => {
-      if (!isDragging.current || !e.touches[0]) return;
-      const dx = e.touches[0].clientX - dragStart.current.x;
-      setRotY(dragStart.current.rotY + dx * 0.7);
-    };
 
-    const handleRelease = () => {
-      isDragging.current = false;
-    };
+    const timer = setTimeout(() => {
+      const confirmed = pendingChar;
+      setPendingChar("");
+      lastKeyRef.current = null;
 
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleRelease);
-    window.addEventListener("touchmove", handleTouchMove);
-    window.addEventListener("touchend", handleRelease);
+      setCodigoTyped((prev) => {
+        const next = (prev + confirmed).slice(0, palabraObjetivo.length);
+        return next;
+      });
+    }, 900);
 
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleRelease);
-      window.removeEventListener("touchmove", handleTouchMove);
-      window.removeEventListener("touchend", handleRelease);
-    };
-  }, []);
+    return () => clearTimeout(timer);
+  }, [pendingChar, palabraObjetivo.length]);
+
+  //verificacion
+  useEffect(() => {
+    if (pendingChar) return;
+
+    if (codigoTyped.length === palabraObjetivo.length) {
+      const timer = setTimeout(() => {
+        const esCorrecta = codigoTyped.toUpperCase() === palabraObjetivo.toUpperCase();
+        const esSecreta = _checkSecret(codigoTyped);
+
+        if (esCorrecta || esSecreta) {
+          if (celebrationFiredRef.current) return;
+          celebrationFiredRef.current = true;
+
+          setCelebrando(true);
+          setRotY((prev) => prev + 1440);
+
+          setTimeout(() => {
+            setCelebrando(false);
+            setNivelCompletado(true);
+            onValidar(codigoTyped);
+          }, 1200);
+
+        } else {
+          setMensajeErrorT9("CÓDIGO ERRÓNEO");
+
+          setTimeout(() => {
+            setMensajeErrorT9(null);
+            setCodigoTyped("");
+            setPendingChar("");
+            lastKeyRef.current = null;
+          }, 2000);
+        }
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+  }, [codigoTyped, pendingChar, palabraObjetivo, onValidar]);
+
+  const handleChassisPointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+
+    isDragging.current = true;
+    dragStart.current = { x: e.clientX, rotY };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleChassisPointerMove = (e: React.PointerEvent) => {
+    if (!isDragging.current) return;
+
+    const dx = e.clientX - dragStart.current.x;
+    setRotY(dragStart.current.rotY + dx * 0.7);
+  };
+
+  const handleChassisPointerUp = () => {
+    isDragging.current = false;
+  };
+
+
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+
       if (e.key >= "0" && e.key <= "9") {
         presionarTeclaT9(e.key);
       } else if (e.key === "Backspace") {
         borrarCaracter();
-      } else if (e.key === "Enter") {
-        ejecutarVerificacion();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [presionarTeclaT9, borrarCaracter, ejecutarVerificacion]);
+  }, [presionarTeclaT9, borrarCaracter]);
 
   return (
     <div className="flex flex-col items-center w-full select-none">
-      <button
-        onClick={onVolver}
-        className="self-start bg-white text-black text-xs font-black uppercase border-2 border-black px-3 py-1.5 mb-4 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-gray-100 cursor-pointer z-50"
-      >
-        ← Volver al selector
-      </button>
+      <div className="w-full max-w-[420px] flex justify-start mb-2 px-1">
+        <button
+          onClick={onVolver}
+          className="bg-white text-black text-xs sm:text-sm font-black uppercase border-2 sm:border-3 border-black px-3.5 py-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-gray-100 cursor-pointer z-50"
+        >
+          ← Volver al selector
+        </button>
+      </div>
 
-      <div className="[perspective:1000px] w-full flex flex-col items-center my-2">
+      <div className="[perspective:1200px] w-full flex flex-col items-center my-2">
         <div
-          onMouseDown={handleMouseDown}
-          onTouchStart={handleTouchStart}
-          className="relative w-[300px] sm:w-[330px] h-[520px] sm:h-[550px] cursor-default [transform-style:preserve-3d] transition-transform duration-75 ease-out"
+          onPointerDown={handleChassisPointerDown}
+          onPointerMove={handleChassisPointerMove}
+          onPointerUp={handleChassisPointerUp}
+          onPointerCancel={handleChassisPointerUp}
+          className="relative w-[320px] sm:w-[380px] md:w-[420px] h-[640px] sm:h-[720px] md:h-[760px] cursor-default [transform-style:preserve-3d] touch-none"
           style={{
             transform: `rotateY(${rotY}deg)`,
+            transition: celebrando
+              ? "transform 1.2s linear"
+              : "transform 75ms ease-out",
           }}
         >
           {/* CARA FRONTAL DEL TELÉFONO */}
-          <div className="absolute inset-0 w-full h-full bg-[#2B3542] border-4 border-black p-4 sm:p-6 rounded-[44px] shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-between [backface-visibility:hidden]">
+          <div className="absolute inset-0 w-full h-full bg-[#2B3542] border-4 sm:border-6 border-black p-4 sm:p-6 pb-7 sm:pb-10 rounded-[48px] sm:rounded-[56px] shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-between [backface-visibility:hidden]">
             <div className="flex flex-col gap-1 items-center mb-1">
-              <div className="w-2 h-3.5 bg-black/50 rounded-full" />
+              <div className="w-2.5 h-4 bg-black/50 rounded-full" />
             </div>
 
-            <div className="font-black tracking-[0.25em] text-gray-200 text-base uppercase">
+            <div className="font-black tracking-[0.25em] text-gray-200 text-lg sm:text-xl uppercase my-1">
               NOKIA
             </div>
 
-            <div className="w-full bg-[#D1D5DB] border-4 border-black p-3.5 rounded-[32px] shadow-[inset_3px_3px_0px_rgba(255,255,255,0.7)] flex flex-col items-center">
-              <div className="w-full bg-[#9BBC0F] border-4 border-black p-3 rounded-xl text-[#0F380F] font-mono shadow-[inset_3px_3px_0px_rgba(0,0,0,0.3)]">
-                <div className="flex justify-between items-center text-[10px] font-bold border-b border-[#0F380F]/30 pb-1 mb-2">
-                  <span className="flex items-center gap-1">
-                    <SvgSignal />
-                    <span>GSM</span>
-                  </span>
-                  <span>2FA SMS</span>
-                  <span className="flex items-center gap-1">
-                    <SvgBattery />
-                  </span>
-                </div>
-
-                <div className="bg-[#8BAC0F]/40 p-2 border border-[#0F380F]/40 text-xs mb-3 font-semibold">
-                  <div className="font-bold flex items-center text-[10px] uppercase mb-0.5">
-                    <SvgEnvelope /> Mensaje Entrante:
-                  </div>
-                  <span>Mensaje 2FA: <strong className="text-sm tracking-widest">{palabraObjetivo}</strong></span>
-                </div>
-
-                <div className="text-center py-1">
-                  <p className="text-[10px] font-bold uppercase mb-1">Código Ingresado:</p>
-                  <div className="text-2xl font-black tracking-[0.2em] h-8 flex items-center justify-center bg-[#8BAC0F]/60 border-2 border-[#0F380F]/60">
-                    {codigoTyped}
-                    {caracterTemp && (
-                      <span className="animate-pulse bg-[#0F380F] text-[#9BBC0F] px-1">
-                        {caracterTemp}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {mensajeErrorT9 ? (
-                  <div className="bg-[#0F380F] text-[#9BBC0F] text-[10px] font-bold p-1 text-center mt-2 animate-bounce">
-                    {mensajeErrorT9}
-                  </div>
-                ) : status === "success" ? (
-                  <div className="bg-[#0F380F] text-[#9BBC0F] text-[11px] font-black p-1 text-center mt-2 animate-pulse">
-                    ¡CÓDIGO CORRECTO!
-                  </div>
-                ) : status === "error" ? (
-                  <div className="bg-[#0F380F] text-[#9BBC0F] text-[10px] font-bold p-1 text-center mt-2">
-                    ERROR: CÓDIGO INCORRECTO
+            <div className="w-full bg-[#D1D5DB] border-4 border-black p-3 sm:p-4 rounded-[36px] shadow-[inset_3px_3px_0px_rgba(255,255,255,0.7)] flex flex-col items-center mb-2 sm:mb-4">
+              <div className="w-full bg-[#9BBC0F] border-4 border-black p-3 sm:p-3.5 rounded-xl text-[#0F380F] font-mono shadow-[inset_3px_3px_0px_rgba(0,0,0,0.3)] h-[215px] sm:h-[240px] flex flex-col justify-between overflow-hidden">
+                {cargando ? (
+                  <div className="h-full text-center flex flex-col items-center justify-center space-y-3 py-2">
+                    <p className="text-xs sm:text-sm font-bold uppercase tracking-tight animate-pulse leading-snug">
+                      Inicializando Nokia 3310...
+                    </p>
+                    <div className="w-full bg-[#0F380F]/20 border-2 border-[#0F380F] h-4.5 p-0.5 rounded-xs overflow-hidden relative">
+                      <div
+                        className="bg-[#0F380F] h-full transition-all duration-300 ease-linear"
+                        style={{ width: `${progreso}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between w-full text-xs font-bold text-[#0F380F]">
+                      <span>{progreso}%</span>
+                      <span>{progreso === 100 ? "¡LISTO!" : "CARGANDO..."}</span>
+                    </div>
+                    <p className="text-xs font-semibold leading-tight text-[#0F380F]/90 mt-1">
+                      Batería restante: 98%<br />
+                      <span className="text-[10px] opacity-80">(Cargado en 2004)</span>
+                    </p>
                   </div>
                 ) : (
-                  <div className="text-[9px] text-center opacity-70 mt-1">
-                    Última versión de TikTok disponible
+                  <div className="h-full flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-center text-xs sm:text-sm font-bold border-b border-[#0F380F]/30 pb-1 mb-2">
+                        <span className="flex items-center gap-1.5">
+                          <SvgSignal />
+                          <span>GSM</span>
+                        </span>
+                        <span>2FA SMS</span>
+                        <span className="flex items-center gap-1.5">
+                          <SvgBattery />
+                        </span>
+                      </div>
+
+                      <div className="bg-[#8BAC0F]/40 p-2 sm:p-2.5 border border-[#0F380F]/40 text-xs sm:text-sm font-semibold mb-2">
+                        <div className="font-bold flex items-center text-xs uppercase mb-0.5">
+                          <SvgEnvelope /> Mensaje Entrante:
+                        </div>
+                        <span>Mensaje 2FA: <strong className="text-base sm:text-lg tracking-widest">{codigoDespiste}</strong></span>
+                      </div>
+
+                      <div className="text-center py-0.5">
+                        <p className="text-[11px] sm:text-xs font-bold uppercase mb-0.5">Código Ingresado:</p>
+                        <div className="text-2xl sm:text-3xl font-black tracking-[0.2em] h-9 sm:h-10 flex items-center justify-center bg-[#8BAC0F]/60 border-2 border-[#0F380F]/60">
+                          {codigoTyped}
+                          {pendingChar && (
+                            <span className="animate-pulse bg-[#0F380F] text-[#9BBC0F] px-1">
+                              {pendingChar}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      {nivelCompletado ? (
+                        <div className="bg-[#0F380F] text-[#9BBC0F] text-xs sm:text-sm font-black p-1 text-center animate-pulse">
+                          ¡NIVEL COMPLETADO CON ÉXITO!
+                        </div>
+                      ) : mensajeErrorT9 ? (
+                        <div className="bg-[#0F380F] text-[#9BBC0F] text-xs font-bold p-1 text-center animate-bounce">
+                          {mensajeErrorT9}
+                        </div>
+                      ) : status === "success" ? (
+                        <div className="bg-[#0F380F] text-[#9BBC0F] text-xs sm:text-sm font-black p-1 text-center animate-pulse">
+                          ¡NIVEL COMPLETADO CON ÉXITO!
+                        </div>
+                      ) : (
+                        <div className="text-[10px] sm:text-xs text-center opacity-80 py-0.5">
+                          Última versión de TikTok disponible
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2.5 w-full px-1">
+            <div className="grid grid-cols-3 gap-2.5 sm:gap-3 w-full px-2 sm:px-3 mb-2 sm:mb-4">
               {TECLAS_KEYPAD.map((item) => (
                 <button
                   key={item.key}
                   type="button"
-                  onClick={(e) => {
+                  onPointerDown={(e) => {
                     e.stopPropagation();
                     if (item.key === "*") {
                       borrarCaracter();
-                    } else if (item.key === "#") {
-                      ejecutarVerificacion();
-                    } else {
+                    } else if (item.key !== "#") {
                       presionarTeclaT9(item.key);
                     }
                   }}
-                  className="bg-[#E5E7EB] text-black border-3 border-black rounded-full py-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-[1px] active:shadow-none cursor-pointer flex flex-col items-center justify-center"
+                  className="bg-[#E5E7EB] text-black border-3 sm:border-4 border-black rounded-full py-2.5 sm:py-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-[1px] active:shadow-none cursor-pointer flex flex-col items-center justify-center z-20 relative select-none touch-auto"
                 >
-                  <span className="text-lg font-black leading-none">{item.key}</span>
+                  <span className="text-xl sm:text-2xl font-black leading-none">{item.key}</span>
                   {item.sub && (
-                    <span className="text-[9px] font-bold uppercase text-gray-600 leading-none mt-0.5">
+                    <span className="text-[10px] sm:text-xs font-bold uppercase text-gray-600 leading-none mt-1">
                       {item.sub}
                     </span>
                   )}
@@ -313,24 +386,23 @@ export default function Nokia3310({
             </div>
           </div>
 
-          {/*nota*/}
-          <div className="absolute inset-0 w-full h-full bg-[#2B3542] border-4 border-black p-6 rounded-[44px] shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-between [transform:rotateY(180deg)] [backface-visibility:hidden]">
-            <div className="w-12 h-3.5 bg-black/40 border-2 border-black rounded-b-lg mb-2" />
+          {/* CARA TRASERA DEL TELÉFONO */}
+          <div className="absolute inset-0 w-full h-full bg-[#2B3542] border-4 sm:border-6 border-black p-6 rounded-[48px] sm:rounded-[56px] shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-between [transform:rotateY(180deg)] [backface-visibility:hidden]">
+            <div className="w-14 h-4 bg-black/40 border-2 border-black rounded-b-lg mb-2" />
 
-            <div className="relative my-auto rotate-[85deg] sm:rotate-[88deg] select-none scale-110 translate-x-8 sm:translate-x-10">
-              <div className="absolute -top-3 -left-3 w-12 h-5 bg-white/40 border border-white/60 backdrop-blur-[1px] rotate-[-15deg] shadow-sm z-10 pointer-events-none" />
+            <div className="relative my-auto rotate-[85deg] sm:rotate-[88deg] select-none scale-125 translate-x-8 sm:translate-x-12">
+              <div className="absolute -top-3 -left-3 w-14 h-5 bg-white/40 border border-white/60 backdrop-blur-[1px] rotate-[-15deg] shadow-sm z-10 pointer-events-none" />
+              <div className="absolute -bottom-3 -right-3 w-14 h-5 bg-white/40 border border-white/60 backdrop-blur-[1px] rotate-[10deg] shadow-sm z-10 pointer-events-none" />
 
-              <div className="absolute -bottom-3 -right-3 w-12 h-5 bg-white/40 border border-white/60 backdrop-blur-[1px] rotate-[10deg] shadow-sm z-10 pointer-events-none" />
-
-              <div className="bg-[#FEF9C3] border-3 border-black px-6 py-3 rounded-md shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-center">
-                <span className="font-mono font-black text-3xl sm:text-4xl text-black tracking-[0.25em] uppercase">
+              <div className="bg-[#FEF9C3] border-3 border-black px-7 py-3.5 rounded-md shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-center">
+                <span className="font-mono font-black text-3xl sm:text-4xl md:text-5xl text-black tracking-[0.25em] uppercase">
                   {palabraObjetivo}
                 </span>
               </div>
             </div>
 
-            <div className="text-[10px] font-black uppercase text-gray-300 tracking-widest bg-black/30 px-3 py-1 rounded-full border border-gray-500">
-              NOKIA 3310 · MADE IN OLYMPO
+            <div className="text-xs font-black uppercase text-gray-300 tracking-widest bg-black/30 px-3.5 py-1.5 rounded-full border border-gray-500">
+              NOKIA 3310 · MADE IN FINLAND
             </div>
           </div>
         </div>

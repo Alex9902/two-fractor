@@ -51,9 +51,8 @@ export default function PantallaJuego({
 
     //si mira consola en lvl 1
     if (nivel.id === 1 && !logPrintado.current) {
-      console.log(
-        "¿Qué buscas aquí, el any que se me escapó? display:no mucho;"
-      );
+      console.log("¿Qué buscas aquí?");
+
       logPrintado.current = true;
     }
   }, [nivel.id]);

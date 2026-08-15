@@ -44,7 +44,17 @@ export default function App() {
       } while (decoyCode === randomCode);
     }
 
-    setCodigoCorrecto(randomCode);
+    if (nivelId === 2) {
+      const palabrasNivel2 = [
+        "CODIGO", "ACCESO", "SEGURO", "FACTOR",
+        "CORREO", "HUELLA", "ROSTRO", "DOBLES"
+      ];
+
+      const palabraRandom = palabrasNivel2[Math.floor(Math.random() * palabrasNivel2.length)];
+      setCodigoCorrecto(palabraRandom);
+    } else {
+      setCodigoCorrecto(randomCode);
+    }
     setCodigoDecoy(decoyCode);
     setCode(Array(nivel.digitos).fill(""));
     setStatus("idle");
@@ -87,11 +97,11 @@ export default function App() {
     }
   };
 
-  const validarCodigo = () => {
+  const validarCodigo = (codigoIngresadoManual?: string) => {
     const nivel = NIVELES.find((n) => n.id === nivelActivo);
     if (!nivel) return;
 
-    const codigoIngresado = code.join("");
+    const codigoIngresado = codigoIngresadoManual !== undefined ? codigoIngresadoManual : code.join("");
 
     if (codigoIngresado === codigoCorrecto) {
       setStatus("success");
@@ -106,6 +116,7 @@ export default function App() {
           console.error("Error guardando progreso:", e);
         }
       }
+
     } else if (nivel.id === 1 && codigoIngresado === codigoDecoy) {
       setStatus("decoy_trap");
     } else {
@@ -119,29 +130,16 @@ export default function App() {
     setStatus("idle");
   };
 
-  const reiniciarProgreso = () => {
-    if (confirm("¿Seguro que quieres reiniciar todo tu progreso de niveles?")) {
-      setMaxNivelDesbloqueado(1);
-      setNivelActivo(null);
-      setCode([]);
-      setStatus("idle");
-      try {
-        localStorage.setItem("two-fractor-progress", "1");
-      } catch (e) {
-        console.error("Error al reiniciar progreso:", e);
-      }
-    }
-  };
+
 
   const nivelActualObjeto = NIVELES.find((n) => n.id === nivelActivo);
 
   return (
-    <div className="min-h-screen w-full bg-[#FAF9F6] text-black font-sans flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen w-full bg-[#FAF9F6] text-black font-sans flex flex-col items-center justify-center p-4 overflow-x-hidden">
       {nivelActivo === null || !nivelActualObjeto ? (
         <SelectorNiveles
           maxNivelDesbloqueado={maxNivelDesbloqueado}
           onSelectNivel={iniciarNivel}
-          onReiniciarProgreso={reiniciarProgreso}
         />
       ) : (
         <PantallaJuego
