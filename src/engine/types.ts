@@ -17,6 +17,7 @@ export interface LevelManifest {
   dificultad: Dificultad;
 
   autor: string;
+  github?: string;
   tags: string[];
   color: string;
 }

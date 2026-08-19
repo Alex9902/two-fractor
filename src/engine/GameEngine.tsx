@@ -7,10 +7,13 @@ import Lvl1 from "../levels/official/lvl1";
 import lvl1Manifest from "../levels/official/lvl1/manifest";
 import Lvl2 from "../levels/official/lvl2";
 import lvl2Manifest from "../levels/official/lvl2/manifest";
+import Lvl3 from "../levels/official/lvl3";
+import lvl3Manifest from "../levels/official/lvl3/manifest";
 
 const OFFICIAL_LEVELS: RegisteredLevel[] = [
   { manifest: lvl1Manifest, Component: Lvl1 },
   { manifest: lvl2Manifest, Component: Lvl2 },
+  { manifest: lvl3Manifest, Component: Lvl3 },
 ];
 
 const PROGRESS_KEY = "two-fractor-progress";
@@ -49,6 +52,7 @@ export default function GameEngine() {
     if (order > maxCompletado) {
       const nuevoMax = order;
       setMaxCompletado(nuevoMax);
+
       try {
         localStorage.setItem(PROGRESS_KEY, nuevoMax.toString());
       } catch { }
