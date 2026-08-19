@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import BolaBingo from "./BolaBingo";
+import { useBomboPhysicsStore } from "./bomboPhysicsStore";
 
 interface BallData {
   letra: string;
@@ -12,22 +13,26 @@ interface BomboBingoProps {
   girando: boolean;
   onGirarBombo: () => void;
   quedanBolas: boolean;
+  esBingoCompletado?: boolean;
+  tiemblando?: boolean;
 }
 
+
+
 const SNAKE_PATH =
-  "M 150 90 C 150 140, 240 35, 320 35 C 400 35, 430 90, 360 115 C 290 140, 100 80, 50 140 C 0 200, 60 260, 150 240 C 240 220, 260 150, 330 150 C 410 150, 420 210, 395 285";
+  "M 150 90 C 180 35, 260 25, 330 30 C 410 35, 425 90, 375 115 C 290 145, 180 145, 80 135 C 25 135, 25 215, 75 235 C 160 255, 280 250, 350 245 C 410 240, 420 270, 395 285";
 
 const N_SEG = 120;   // Alta densidad de vértices para los múltiplos bucles del tubo largo
-const TUBE_R = 19;    // Semiancho del tubo en reposo (radio = 19px → ancho base 38px, un poco más ancho)
-const SPHERE_R = 32;    // Radio de la esfera rígida (32px → ¡64px de bulto!)
+const TUBE_R = 17;    // Semiancho del tubo en reposo (ancho 34px)
+const SPHERE_R = 28;    // Radio de la esfera (ancho abombado 56px)
 const STRUCT_K = 0.35;  // Tensión a lo largo de las paredes
 const CROSS_K = 0.04;  // Resistencia a expansión cruzada (baja para permitir gran bulto)
 const DIAG_K = 0.10;  // Resistencia a cizallamiento
 const REST_K = 0.04;  // Fuerza de restauración elástica a la posición original
 const DAMPING = 0.90;  // Amortiguación por sub-paso
 const SUBSTEPS = 6;     // Sub-pasos de física por frame
-const ANIM_MS = 5500;  // Tiempo de viaje de la bola (más lento)
-const SETTLE_MS = 1500; // Tiempo de rebote elástico tras salir la bola
+const ANIM_MS = 3200;  // Tiempo de viaje de la bola (más rápida)
+const SETTLE_MS = 800;  // Tiempo de rebote elástico tras salir la bola
 
 interface Vertex {
   x: number; y: number;
@@ -263,14 +268,44 @@ export default function BomboBingo({
   girando,
   onGirarBombo,
   quedanBolas,
+  esBingoCompletado,
+  tiemblando,
 }: BomboBingoProps) {
   const [paloAbajo, setPaloAbajo] = useState(false);
   const [faseBola, setFaseBola] = useState<"idle" | "deslizando" | "reposo">("idle");
   const prevBola = useRef<BallData | null>(null);
 
+  // ── Zustand & gl-matrix 2D Physics Store ──
+  const mainBalls = useBomboPhysicsStore((s) => s.mainBalls);
+  const glassBalls = useBomboPhysicsStore((s) => s.glassBalls);
+  const isExploded = useBomboPhysicsStore((s) => s.isExploded);
+  const setIsSpinning = useBomboPhysicsStore((s) => s.setIsSpinning);
+  const initPhysicsStore = useBomboPhysicsStore((s) => s.initPhysics);
+  const stepPhysicsStore = useBomboPhysicsStore((s) => s.stepPhysics);
+
+  useEffect(() => {
+    initPhysicsStore();
+  }, [initPhysicsStore]);
+
+  useEffect(() => {
+    setIsSpinning(girando);
+  }, [girando, setIsSpinning]);
+
+  useEffect(() => {
+    let animId: number;
+    const loop = () => {
+      stepPhysicsStore();
+      animId = requestAnimationFrame(loop);
+    };
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, [stepPhysicsStore]);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const physRef = useRef<ReturnType<typeof initPhysics> | null>(null);
+
+  const ANIM_MS = 450;
 
   useEffect(() => {
     if (bolaActual && bolaActual !== prevBola.current && !girando) {
@@ -281,6 +316,19 @@ export default function BomboBingo({
       return () => clearTimeout(t);
     }
   }, [bolaActual, girando]);
+
+  // ── Generación automática de bola superrápida cada 450ms ──
+  useEffect(() => {
+    if (!quedanBolas || esBingoCompletado) return;
+    const timer = setInterval(() => {
+      if (!girando && (faseBola === "reposo" || faseBola === "idle")) {
+        setPaloAbajo(true);
+        setTimeout(() => setPaloAbajo(false), 150);
+        onGirarBombo();
+      }
+    }, 450);
+    return () => clearInterval(timer);
+  }, [girando, quedanBolas, faseBola, onGirarBombo, esBingoCompletado]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -365,13 +413,7 @@ export default function BomboBingo({
     drawTube(ctx, phys.verts, phys.leftCount, null);
   }, []);
 
-  const handlePalanca = () => {
-    if (girando || !quedanBolas) return;
-    setPaloAbajo(true);
-    setFaseBola("idle");
-    setTimeout(() => setPaloAbajo(false), 550);
-    onGirarBombo();
-  };
+
 
   const bolasVisibles =
     faseBola !== "reposo" && faseBola !== "idle"
@@ -387,12 +429,15 @@ export default function BomboBingo({
           className="relative -mb-24 z-10"
           style={{ width: 440, height: 300 }}
         >
-          {/* ── CAPA 1: SVG Fondo (soportes y sombra) ── */}
+          {/* ── CAPA 1: SVG Fondo (Soportes y Sombra) ── */}
           <svg
             width="440" height="300" viewBox="0 0 440 300" fill="none"
             style={{ position: "absolute", top: 0, left: 0, zIndex: 1 }}
           >
+            {/* Sombras en el suelo */}
             <ellipse cx="150" cy="188" rx="85" ry="12" fill="black" opacity="0.25" />
+
+            {/* Soportes */}
             <rect x="85" y="152" width="14" height="34" rx="4" fill="#94A3B8" stroke="black" strokeWidth="2" />
             <rect x="201" y="152" width="14" height="34" rx="4" fill="#94A3B8" stroke="black" strokeWidth="2" />
             <rect x="75" y="180" width="150" height="9" rx="4" fill="#334155" stroke="black" strokeWidth="2.5" />
@@ -406,14 +451,14 @@ export default function BomboBingo({
             style={{ position: "absolute", top: 0, left: 0, zIndex: 2 }}
           />
 
-          {/* ── CAPA 3: SVG Primer plano (bombo, palanca y abrazaderas) ── */}
+          {/* ── CAPA 3: SVG Primer plano (Esfera del bombo, boca con luz amarilla y palanca) ── */}
           <svg
             width="440" height="300" viewBox="0 0 440 300" fill="none"
             style={{ position: "absolute", top: 0, left: 0, zIndex: 3 }}
             className="overflow-visible"
           >
             <defs>
-              <radialGradient id="goldShadingB" cx="45%" cy="38%" r="72%">
+              <radialGradient id="goldShadingB3" cx="45%" cy="38%" r="72%">
                 <stop offset="0%" stopColor="#FDE047" stopOpacity="0.5" />
                 <stop offset="65%" stopColor="#CA8A04" stopOpacity="0.1" />
                 <stop offset="100%" stopColor="#713F12" stopOpacity="0.45" />
@@ -423,36 +468,90 @@ export default function BomboBingo({
                 <stop offset="50%" stopColor="#94A3B8" />
                 <stop offset="100%" stopColor="#475569" />
               </linearGradient>
+              {/* Máscara de recorte de alta velocidad acelerada por GPU para la ventana de cristal */}
+              <clipPath id="glassWindowClip">
+                <circle cx="150" cy="90" r="29" />
+              </clipPath>
             </defs>
 
-            {/* Abrazaderas */}
-            <rect x="295" y="70" width="9" height="19" rx="2" fill="white" stroke="black" strokeWidth="2" />
-            <rect x="380" y="60" width="9" height="19" rx="2" fill="white" stroke="black" strokeWidth="2" />
-            <rect x="260" y="155" width="9" height="19" rx="2" fill="white" stroke="black" strokeWidth="2" />
-            <rect x="352" y="235" width="9" height="19" rx="2" fill="white" stroke="black" strokeWidth="2" />
+            {isExploded ? (
+              <g key="shards">
+                <polygon points="110,60 135,45 125,75" fill="#EAB308" stroke="black" strokeWidth="2.5" />
+                <polygon points="170,40 190,65 160,70" fill="#CA8A04" stroke="black" strokeWidth="2.5" />
+                <polygon points="90,100 120,120 100,135" fill="#EAB308" stroke="black" strokeWidth="2.5" />
+                <polygon points="180,110 210,95 195,130" fill="#CA8A04" stroke="black" strokeWidth="2.5" />
+                <circle cx="150" cy="90" r="50" fill="#FACC15" opacity="0.35" className="animate-ping" />
+              </g>
+            ) : (
+              <g key="normal" className={tiemblando ? "animate-[tremble_0.07s_infinite]" : ""}>
+                {/* Esfera del bombo en Z=3 (para que el tramo intermedio de la tubería en Z=2 pase POR DETRÁS del bombo) */}
+                <circle cx="150" cy="90" r="74" fill="#EAB308" stroke="#0F172A" strokeWidth="5" />
+                <circle cx="150" cy="90" r="74" fill="url(#goldShadingB3)" />
 
-            {/* Esfera del bombo */}
-            <circle cx="150" cy="90" r="74" fill="#EAB308" stroke="#0F172A" strokeWidth="5" />
-            <circle cx="150" cy="90" r="74" fill="url(#goldShadingB)" />
+                {/* Grietas energéticas rojas si está temblando */}
+                {tiemblando && (
+                  <g>
+                    <path d="M 120 50 L 140 75 L 130 110" stroke="#EF4444" strokeWidth="3.5" strokeLinecap="round" fill="none" className="animate-pulse" />
+                    <path d="M 175 60 L 160 85 L 185 115" stroke="#EF4444" strokeWidth="3.5" strokeLinecap="round" fill="none" className="animate-pulse" />
+                    <circle cx="150" cy="90" r="74" fill="#EF4444" opacity="0.3" className="animate-ping" />
+                  </g>
+                )}
 
-            {/* Rejilla giratoria */}
-            <g style={{ transformOrigin: "150px 90px", animation: girando ? "spinRejilla 0.5s linear infinite" : "none" }}>
-              <ellipse cx="150" cy="90" rx="3" ry="72" fill="none" stroke="#78350F" strokeWidth="2.5" opacity="0.35" />
-              <ellipse cx="150" cy="90" rx="35" ry="72" fill="none" stroke="#78350F" strokeWidth="2" strokeDasharray="5 3" opacity="0.3" />
-              <ellipse cx="150" cy="90" rx="60" ry="72" fill="none" stroke="#78350F" strokeWidth="2" strokeDasharray="5 3" opacity="0.25" />
-              <ellipse cx="150" cy="90" rx="72" ry="11" fill="none" stroke="#78350F" strokeWidth="2" strokeDasharray="6 3" opacity="0.3" />
-              <ellipse cx="150" cy="52" rx="52" ry="7" fill="none" stroke="#78350F" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.25" />
-              <ellipse cx="150" cy="128" rx="52" ry="7" fill="none" stroke="#78350F" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.25" />
-            </g>
+                {/* Rejilla giratoria */}
+                <g style={{ transformOrigin: "150px 90px", animation: girando ? "spinRejilla 0.5s linear infinite" : "none" }}>
+                  <ellipse cx="150" cy="90" rx="3" ry="72" fill="none" stroke="#78350F" strokeWidth="2.5" opacity="0.35" />
+                  <ellipse cx="150" cy="90" rx="35" ry="72" fill="none" stroke="#78350F" strokeWidth="2" strokeDasharray="5 3" opacity="0.3" />
+                  <ellipse cx="150" cy="90" rx="60" ry="72" fill="none" stroke="#78350F" strokeWidth="2" strokeDasharray="5 3" opacity="0.25" />
+                  <ellipse cx="150" cy="90" rx="72" ry="11" fill="none" stroke="#78350F" strokeWidth="2" strokeDasharray="6 3" opacity="0.3" />
+                  <ellipse cx="150" cy="52" rx="52" ry="7" fill="none" stroke="#78350F" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.25" />
+                  <ellipse cx="150" cy="128" rx="52" ry="7" fill="none" stroke="#78350F" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.25" />
+                </g>
 
-            {/* Destellos 3D */}
-            <ellipse cx="122" cy="54" rx="26" ry="13" fill="white" opacity="0.35" />
-            <ellipse cx="117" cy="50" rx="10" ry="5" fill="white" opacity="0.25" />
+                {/* ── BOLAS DENTRO DEL BOMBO: ATENUADAS / OSCURECIDAS EN EL CUERPO DORADO ── */}
+                <g opacity="0.5" style={{ filter: "brightness(0.4) contrast(1.2)" }}>
+                  {mainBalls.map((b) => (
+                    <g key={b.id} transform={`translate(${b.pos[0]}, ${b.pos[1]})`}>
+                      <circle r={b.radius} fill={b.color} stroke="black" strokeWidth="1.2" />
+                      <circle r={b.radius * 0.3} cx={-b.radius * 0.3} cy={-b.radius * 0.3} fill="white" opacity="0.4" />
+                    </g>
+                  ))}
+                </g>
 
-            {/* Boca de salida */}
-            <circle cx="150" cy="90" r="34" fill="url(#metalGradientB)" stroke="#0F172A" strokeWidth="4" />
-            <circle cx="150" cy="90" r="29" fill="#090D16" />
-            <circle cx="140" cy="80" r="6" fill="white" opacity="0.12" />
+                {/* Destellos 3D en la esfera dorada */}
+                <ellipse cx="122" cy="54" rx="26" ry="13" fill="white" opacity="0.35" />
+                <ellipse cx="117" cy="50" rx="10" ry="5" fill="white" opacity="0.25" />
+
+                {/* ── VENTANA DE CRISTAL ("CRISTALITO"): REVELA LAS BOLAS EN COLOR VIBRANTE 100% ── */}
+                <g clipPath="url(#glassWindowClip)">
+                  {/* Cristal de fondo de la boca */}
+                  <circle cx="150" cy="90" r="29" fill="#0F172A" opacity="0.85" />
+
+                  {/* Bolas a FULL COLOR vabrante aceleradas por clipPath GPU al cruzar el cristal */}
+                  {mainBalls.map((b) => (
+                    <g key={`bright-${b.id}`} transform={`translate(${b.pos[0]}, ${b.pos[1]})`}>
+                      <circle r={b.radius + 1} fill={b.color} stroke="black" strokeWidth="1.5" />
+                      <circle r={b.radius * 0.35} cx={-b.radius * 0.35} cy={-b.radius * 0.35} fill="white" opacity="0.65" />
+                    </g>
+                  ))}
+
+                  {/* Bolas rebotando dentro de la ventana de cristal */}
+                  {glassBalls.map((b) => (
+                    <g key={`glass-${b.id}`} transform={`translate(${b.pos[0]}, ${b.pos[1]})`}>
+                      <circle r={b.radius} fill={b.color} stroke="black" strokeWidth="1.5" />
+                      <circle r={b.radius * 0.35} cx={-b.radius * 0.35} cy={-b.radius * 0.35} fill="white" opacity="0.7" />
+                    </g>
+                  ))}
+                </g>
+
+                {/* REFLEJOS Y DESTELLOS DE CRISTAL 3D ("CRISTALITO") */}
+                <ellipse cx="140" cy="76" rx="9" ry="4.5" fill="white" opacity="0.55" transform="rotate(-28 140 76)" />
+                <path d="M 127 88 A 25 25 0 0 1 163 72" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" opacity="0.65" />
+
+                {/* Anillo de marco metálico Neo-Brutalista alrededor del cristalito */}
+                <circle cx="150" cy="90" r="32" fill="none" stroke="black" strokeWidth="4" />
+                <circle cx="150" cy="90" r="30" fill="none" stroke="url(#metalGradientB)" strokeWidth="3" />
+              </g>
+            )}
 
             {/* Ejes */}
             <rect x="68" y="85" width="14" height="10" rx="4" fill="url(#metalGradientB)" stroke="#0F172A" strokeWidth="2" />
@@ -478,19 +577,7 @@ export default function BomboBingo({
           </svg>
         </div>
 
-        {/* ── Botón ── */}
-        <div className="z-40 my-1">
-          <button
-            onClick={handlePalanca}
-            disabled={girando || !quedanBolas}
-            className={`font-black uppercase border-3 sm:border-4 border-black px-6 py-2 text-xs sm:text-sm tracking-wider shadow-[3.5px_3.5px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer ${girando || !quedanBolas
-              ? "bg-gray-300 text-gray-500 cursor-not-allowed shadow-none"
-              : "bg-[#4ADE80] text-black hover:bg-[#3ec972] active:translate-x-[1px] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
-              }`}
-          >
-            {girando ? "SACANDO BOLA..." : quedanBolas ? "SACAR BOLA" : "FIN DEL BOMBO"}
-          </button>
-        </div>
+
 
         {/* ── Canaleta de extracción ── */}
         <div className="w-full px-2 relative z-20">
@@ -500,7 +587,6 @@ export default function BomboBingo({
           <div className="bg-gradient-to-b from-[#1E293B] to-[#0F172A] border-3 sm:border-4 border-black rounded-xl p-2.5 shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden">
             <div className="flex justify-between items-center px-1 mb-2 border-b-2 border-slate-700/80 pb-1.5">
               <span className="text-[10px] font-black uppercase text-[#FFDE4D] tracking-wider flex items-center gap-1.5">
-                <span className="text-xs">🎱</span> CANALETA DE EXTRACCIÓN
               </span>
               <span className="text-[9px] font-black text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-600">
                 {bolasVisibles.length} / 90 BOLAS
@@ -539,9 +625,25 @@ export default function BomboBingo({
       </div>
 
       <style>{`
+        @keyframes tremble {
+          0%   { transform: translate(0px, 0px) rotate(0deg); }
+          25%  { transform: translate(-4px, 3px) rotate(-1.5deg); }
+          50%  { transform: translate(4px, -3px) rotate(1.5deg); }
+          75%  { transform: translate(-3px, -2px) rotate(-1deg); }
+          100% { transform: translate(3px, 2px) rotate(1deg); }
+        }
         @keyframes spinRejilla {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }
+        }
+        @keyframes tumbleBalls {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes bounceInGlass {
+          0%   { transform: translate(0px, 0px) scale(0.92); }
+          50%  { transform: translate(3px, -4px) scale(1.08); }
+          100% { transform: translate(-3px, 3px) scale(0.95); }
         }
         @keyframes slotLand {
           0%   { transform: scale(1.3); }

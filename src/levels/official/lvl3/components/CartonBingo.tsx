@@ -1,3 +1,5 @@
+import { useState, useRef, useEffect } from "react";
+
 export interface CasillaBingo {
   id: number;
   numero: number;
@@ -18,14 +20,69 @@ export default function CartonBingo({
 }: CartonBingoProps) {
   const columnas = ["B", "I", "N", "G", "O"];
 
+  const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (!esBingoCompletado) {
+      setDragPos({ x: 0, y: 0 });
+    }
+  }, [esBingoCompletado]);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+
+    setIsDragging(true);
+
+    dragStartRef.current = {
+      x: e.clientX - dragPos.x,
+      y: e.clientY - dragPos.y,
+    };
+
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch { }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging) return;
+
+    setDragPos({
+      x: e.clientX - dragStartRef.current.x,
+      y: e.clientY - dragStartRef.current.y,
+    });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (isDragging) {
+      setIsDragging(false);
+
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch { }
+    }
+  };
+
   return (
-    <div className="relative w-full select-none">
-      <div className="relative z-20 transition-transform duration-300">
+    <div className="relative w-full select-none z-30">
+      <div
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        style={{
+          transform: `translate3d(${dragPos.x}px, ${dragPos.y}px, 0px)`,
+          cursor: isDragging ? "grabbing" : "grab",
+          touchAction: "none",
+          willChange: isDragging ? "transform" : "auto",
+        }}
+      >
+
         {/* Cartón de Bingo Neobrutalista */}
         <div
-          className={`bg-[#FFFBEB] border-3 sm:border-5 border-black rounded-xl p-2.5 sm:p-3.5 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden transition-all ${
-            esBingoCompletado ? "ring-6 ring-[#4ADE80] animate-bounce" : ""
-          }`}
+          className={`w-full bg-[#FFFBEB] border-3 sm:border-5 border-black rounded-xl p-2.5 sm:p-3.5 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden transition-all ${esBingoCompletado ? "ring-6 ring-[#4ADE80] animate-bounce" : ""
+            }`}
         >
           {/* Cabecera del Cartón */}
           <div className="grid grid-cols-5 gap-1 mb-2">
@@ -46,11 +103,10 @@ export default function CartonBingo({
                 key={casilla.id}
                 type="button"
                 onClick={() => onTacharNumero(casilla.numero)}
-                className={`relative aspect-square border-2 sm:border-3 border-black rounded font-black text-sm sm:text-xl flex items-center justify-center transition-all cursor-pointer ${
-                  casilla.tachada
+                className={`relative aspect-square border-2 sm:border-3 border-black rounded font-black text-sm sm:text-xl flex items-center justify-center transition-all cursor-pointer ${casilla.tachada
                     ? "bg-[#FF6B6B]/20 text-black/40 shadow-none scale-95"
                     : "bg-white text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-[#FEF08A] hover:scale-105 active:translate-x-[1px] active:translate-y-[1px]"
-                }`}
+                  }`}
               >
                 <span>{casilla.numero}</span>
 

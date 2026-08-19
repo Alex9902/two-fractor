@@ -1,3 +1,5 @@
+import { useState, useRef, useEffect } from "react";
+
 interface PortatilFondoProps {
   codigoMostrado: string[];
   totalNumerosObjetivo: number;
@@ -11,8 +13,64 @@ export default function PortatilFondo({
   numerosTachadosCount,
   esBingoCompletado,
 }: PortatilFondoProps) {
+  const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (!esBingoCompletado) {
+      setDragPos({ x: 0, y: 0 });
+    }
+  }, [esBingoCompletado]);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest("button, a, input")) return;
+
+    setIsDragging(true);
+
+    dragStartRef.current = {
+      x: e.clientX - dragPos.x,
+      y: e.clientY - dragPos.y,
+    };
+
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch { }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging) return;
+
+    setDragPos({
+      x: e.clientX - dragStartRef.current.x,
+      y: e.clientY - dragStartRef.current.y,
+    });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (isDragging) {
+      setIsDragging(false);
+
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch { }
+    }
+  };
+
   return (
-    <div className="w-full max-w-3xl mx-auto select-none pointer-events-none transition-all">
+    <div
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      style={{
+        transform: `translate3d(${dragPos.x}px, ${dragPos.y}px, 0px)`,
+        cursor: isDragging ? "grabbing" : "grab",
+        touchAction: "none",
+        willChange: isDragging ? "transform" : "auto",
+      }}
+      className="w-full max-w-3xl mx-auto select-none"
+    >
       {/* Marco exterior del portátil */}
       <div className="bg-[#1E293B] border-4 sm:border-6 border-black rounded-t-2xl p-3 sm:p-5 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden">
         {/* Cámara web */}
@@ -63,11 +121,10 @@ export default function PortatilFondo({
                   return (
                     <div
                       key={i}
-                      className={`w-9 h-11 sm:w-11 sm:h-14 border-3 sm:border-4 border-black font-mono font-black text-base sm:text-xl flex items-center justify-center transition-all ${
-                        val
+                      className={`w-9 h-11 sm:w-11 sm:h-14 border-3 sm:border-4 border-black font-mono font-black text-base sm:text-xl flex items-center justify-center transition-all ${val
                           ? "bg-[#4ADE80] text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] scale-105"
                           : "bg-white text-gray-300 shadow-[inset_2px_2px_0px_rgba(0,0,0,0.1)]"
-                      }`}
+                        }`}
                     >
                       {val || "_"}
                     </div>

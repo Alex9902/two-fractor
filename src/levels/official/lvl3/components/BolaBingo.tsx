@@ -38,12 +38,16 @@ export default function BolaBingo({
   return (
     <div
       onClick={onClick}
-      className={`relative rounded-full flex flex-col items-center justify-center border-black select-none transition-transform ${
+      className={`relative rounded-full flex flex-col items-center justify-center border-black select-none transition-transform overflow-hidden ${
         color.bg
-      } ${sizeClasses[size]} ${destacada ? "animate-bounce scale-110 z-10" : ""} ${
+      } ${sizeClasses[size]} ${destacada ? "z-10" : ""} ${
         onClick ? "cursor-pointer hover:scale-105 active:scale-95" : ""
       }`}
     >
+      {/* Brillo especular esférico para dar tridimensionalidad visible al girar */}
+      <div className="absolute top-0.5 left-1 w-2.5 h-1.5 bg-white/40 rounded-full blur-[0.5px]" />
+      <div className="absolute bottom-0.5 right-1 w-2 h-1 bg-black/20 rounded-full" />
+
       <div
         className={`rounded-full bg-white border-black flex flex-col items-center justify-center leading-none ${innerCircleSize[size]}`}
       >
