@@ -15,11 +15,11 @@ interface BomboBingoProps {
 }
 
 const SNAKE_PATH =
-  "M 155 110 C 230 130 310 80 370 50 C 410 25 420 70 390 95 C 360 120 300 115 270 140 C 240 165 250 205 300 210 C 345 215 390 240 395 285";
+  "M 150 90 C 150 140, 240 35, 320 35 C 400 35, 430 90, 360 115 C 290 140, 100 80, 50 140 C 0 200, 60 260, 150 240 C 240 220, 260 150, 330 150 C 410 150, 420 210, 395 285";
 
-const N_SEG = 80;    // Mayor densidad de vértices para curvas ultra-suaves
-const TUBE_R = 17;    // Semiancho del tubo en reposo (radio = 17px → ancho base 34px, mucho más gordo)
-const SPHERE_R = 25;    // Radio de la esfera rígida (30px → ¡60px de bulto!)
+const N_SEG = 120;   // Alta densidad de vértices para los múltiplos bucles del tubo largo
+const TUBE_R = 19;    // Semiancho del tubo en reposo (radio = 19px → ancho base 38px, un poco más ancho)
+const SPHERE_R = 32;    // Radio de la esfera rígida (32px → ¡64px de bulto!)
 const STRUCT_K = 0.35;  // Tensión a lo largo de las paredes
 const CROSS_K = 0.04;  // Resistencia a expansión cruzada (baja para permitir gran bulto)
 const DIAG_K = 0.10;  // Resistencia a cizallamiento
@@ -39,6 +39,7 @@ interface Spring {
   a: number; b: number;
   rest: number;
   k: number;
+  isCross?: boolean;
 }
 
 function sampleSVGPath(pathD: string, n: number) {
@@ -128,16 +129,15 @@ function initPhysics(pathD: string) {
   for (let i = 0; i < N_SEG; i++) {
     springs.push({ a: li(i), b: li(i + 1), rest: vdist(left[i], left[i + 1]), k: STRUCT_K });
     springs.push({ a: ri(i), b: ri(i + 1), rest: vdist(right[i], right[i + 1]), k: STRUCT_K });
-    springs.push({ a: li(i), b: ri(i), rest: vdist(left[i], right[i]), k: CROSS_K });
-    springs.push({ a: li(i), b: ri(i + 1), rest: vdist(left[i], right[i + 1]), k: DIAG_K });
-    springs.push({ a: li(i + 1), b: ri(i), rest: vdist(left[i + 1], right[i]), k: DIAG_K });
+    springs.push({ a: li(i), b: ri(i), rest: vdist(left[i], right[i]), k: CROSS_K, isCross: true });
+    springs.push({ a: li(i), b: ri(i + 1), rest: vdist(left[i], right[i + 1]), k: DIAG_K, isCross: true });
+    springs.push({ a: li(i + 1), b: ri(i), rest: vdist(left[i + 1], right[i]), k: DIAG_K, isCross: true });
   }
-  springs.push({ a: li(N_SEG), b: ri(N_SEG), rest: vdist(left[N_SEG], right[N_SEG]), k: CROSS_K });
+  springs.push({ a: li(N_SEG), b: ri(N_SEG), rest: vdist(left[N_SEG], right[N_SEG]), k: CROSS_K, isCross: true });
 
   return { verts, springs, pathPts: pts, leftCount: count };
 }
 
-// Bucle de física (Hooke + Verlet + Colisión Esférica)
 function stepPhysics(
   verts: Vertex[],
   springs: Spring[],
@@ -156,7 +156,14 @@ function stepPhysics(
     const dy = b.y - a.y;
     const d = Math.hypot(dx, dy) || 0.001;
     const stretch = d - sp.rest;
-    const f = (sp.k * stretch) / d;
+
+    let k = sp.k;
+
+    if (sp.isCross) {
+      k = stretch > 0 ? 0.001 : 0.8;
+    }
+
+    const f = (k * stretch) / d;
 
     ax[sp.a] += f * dx; ay[sp.a] += f * dy;
     ax[sp.b] -= f * dx; ay[sp.b] -= f * dy;
@@ -181,7 +188,7 @@ function stepPhysics(
     v.y += vy + ay[i];
   }
 
-  //colisión
+  //colisión simétrica rígida
   const r2 = SPHERE_R * SPHERE_R;
 
   for (let i = 0; i < n; i++) {
@@ -206,7 +213,7 @@ function drawTube(
   ctx: CanvasRenderingContext2D,
   verts: Vertex[],
   leftCount: number,
-  spherePos: { x: number; y: number } | null
+  _spherePos: { x: number; y: number } | null
 ) {
   const L = verts.slice(0, leftCount);
   const R = verts.slice(leftCount);
@@ -246,24 +253,6 @@ function drawTube(
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   ctx.stroke();
-
-  //bola
-  if (spherePos) {
-    const { x: sx, y: sy } = spherePos;
-
-    ctx.beginPath();
-    ctx.arc(sx, sy, SPHERE_R - 1, 0, Math.PI * 2);
-    ctx.fillStyle = "#94A3B8";
-    ctx.fill();
-    ctx.strokeStyle = "black";
-    ctx.lineWidth = 4;
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(sx - SPHERE_R * 0.35, sy - SPHERE_R * 0.35, SPHERE_R * 0.25, 0, Math.PI * 2);
-    ctx.fillStyle = "#FFFFFF";
-    ctx.fill();
-  }
 
   ctx.restore();
 }
